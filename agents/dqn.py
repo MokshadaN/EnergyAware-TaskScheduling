@@ -9,96 +9,107 @@ from typing import List, Tuple
 class DQNNetwork(nn.Module):
     def __init__(self, n_input, n_actions):
         super().__init__()
-        self.fc1 = nn.Linear(n_input, 128)
-        self.fc2 = nn.Linear(128, 256)
-        self.fc3 = nn.Linear(256, 128)
-        self.fc4 = nn.Linear(128, n_actions)
+        self.fc1 = nn.Linear(n_input, 256)
+        self.bn1 = nn.BatchNorm1d(256)
+        self.fc2 = nn.Linear(256, 512)
+        self.bn2 = nn.BatchNorm1d(512)
+        self.fc3 = nn.Linear(512, 256)
+        self.bn3 = nn.BatchNorm1d(256)
+        self.fc4 = nn.Linear(256, 128)
+        self.fc5 = nn.Linear(128, n_actions)
+        self.dropout = nn.Dropout(0.2)
         
-        # Initialize weights simply
         for m in self.modules():
             if isinstance(m, nn.Linear):
                 nn.init.xavier_uniform_(m.weight)
                 nn.init.zeros_(m.bias)
-        
-        self.dq1 = nn.Parameter(torch.tensor(0.0), requires_grad=False)
-        self.dq2 = nn.Parameter(torch.tensor(0.0), requires_grad=False)
 
     def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-        x = torch.relu(self.fc3(x))
-        return self.fc4(x)
+        # Handle batch size of 1 for BatchNorm compatibility
+        if x.dim() == 1:
+            x = x.unsqueeze(0)
+            
+        if x.size(0) > 1 or not self.training:
+            x = torch.relu(self.bn1(self.fc1(x)))
+            x = self.dropout(x)
+            x = torch.relu(self.bn2(self.fc2(x)))
+            x = self.dropout(x)
+            x = torch.relu(self.bn3(self.fc3(x)))
+        else:
+            # Fallback for single sample training (not ideal but avoids crash)
+            x = torch.relu(self.fc1(x))
+            x = self.dropout(x)
+            x = torch.relu(self.fc2(x))
+            x = self.dropout(x)
+            x = torch.relu(self.fc3(x))
+            
+        x = torch.relu(self.fc4(x))
+        return self.fc5(x)
 
-class ReplayBuffer:
-    def __init__(self, capacity=10000):
+class PrioritizedReplay:
+    def __init__(self, capacity=20000, alpha=0.6):
         self.buffer = deque(maxlen=capacity)
-    
-    def add(self, state, action, reward, next_state, done):
+        self.priorities = deque(maxlen=capacity)
+        self.alpha = alpha
+
+    def add(self, state, action, reward, next_state, done, error=None):
+        p = 1.0 if error is None else (abs(error) + 1e-5) ** self.alpha
         self.buffer.append((state, action, reward, next_state, done))
-    
+        self.priorities.append(p)
+
     def sample(self, batch_size):
-        batch = random.sample(self.buffer, min(batch_size, len(self.buffer)))
+        if not self.buffer: return None
+        ps = np.array(self.priorities)
+        probs = ps / ps.sum()
+        indices = np.random.choice(len(self.buffer), min(batch_size, len(self.buffer)), p=probs)
+        batch = [self.buffer[i] for i in indices]
         s, a, r, ns, d = zip(*batch)
-        return (np.array(s), np.array(a), np.array(r), np.array(ns), np.array(d))
+        return np.array(s), np.array(a), np.array(r), np.array(ns), np.array(d), indices
+
+    def update_priorities(self, indices, errors):
+        for idx, err in zip(indices, errors):
+            self.priorities[idx] = (abs(err) + 1e-5) ** self.alpha
 
 class DQNAgent:
-    def __init__(self, n_input, n_actions, lr=0.001, gamma=0.99, epsilon=1.0, device='cpu'):
+    def __init__(self, n_input, n_actions, lr=0.0005, device='cpu'):
         self.n_actions = n_actions
-        self.gamma = gamma
-        self.epsilon = epsilon
-        self.epsilon_min = 0.01
-        self.epsilon_decay = 0.998
-        self.batch_size = 32
         self.device = device
+        self.gamma = 0.99
+        self.epsilon = 1.0
+        self.memory = PrioritizedReplay()
         
         self.model = DQNNetwork(n_input, n_actions).to(device)
         self.target = DQNNetwork(n_input, n_actions).to(device)
         self.target.load_state_dict(self.model.state_dict())
         
-        self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
-        self.memory = ReplayBuffer()
-        self.weights = self._init_weights([0.8, 0.6, 0.6, 0.7, 0.7])
+        self.optimizer = optim.Adam(self.model.parameters(), lr=lr, weight_decay=1e-5)
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=50, gamma=0.9)
+        self.loss_fn = nn.SmoothL1Loss()
+        self.weights = self._init_weights([0.8, 0.7, 0.6, 0.7, 0.7, 0.6])
 
     def _init_weights(self, vals):
-        total = sum(vals)
-        return np.array([v / total for v in vals])
+        w = np.array(vals) / sum(vals)
+        return w * 0.95 + 0.05 / len(w)
 
-    def select_action(self, state):
-        if random.random() < self.epsilon:
+    def select_action(self, state, eval_mode=False):
+        if not eval_mode and random.random() < self.epsilon:
             return random.randint(0, self.n_actions - 1)
         
-        st = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+        self.model.eval()
         with torch.no_grad():
+            st = torch.FloatTensor(state).unsqueeze(0).to(self.device)
             q = self.model(st)
-        return torch.argmax(q).item()
+            if not eval_mode and self.epsilon > 0.1:
+                probs = torch.softmax(q / max(0.5, self.epsilon), dim=1)
+                return torch.multinomial(probs, 1).item()
+            return torch.argmax(q).item()
 
-    def process_rewards(self, state, action, next_state, metrics):
-        # Stage 1 analysis
-        w = self.weights
-        r1 = w[0]*metrics['uptime'] + w[1]*metrics['mem'] + w[2]*metrics['disk']
+    def learn(self, batch_size=64):
+        if len(self.memory.buffer) < batch_size: return 0.0
         
-        st = torch.FloatTensor(state).unsqueeze(0).to(self.device)
-        nst = torch.FloatTensor(next_state).unsqueeze(0).to(self.device)
-        
-        with torch.no_grad():
-            curr_q = self.model(st)[0, action].item()
-            nxt_q = self.target(nst).max().item()
-        
-        dq1 = 0.001 * (r1 + self.gamma * nxt_q - curr_q)
-        self.model.dq1.copy_(torch.tensor(dq1))
-        
-        # Stage 2 analysis
-        r2 = w[3]*metrics['cpu'] + w[4]*metrics['ram']
-        dq2 = 0.001 * (r2 + self.gamma * nxt_q - curr_q)
-        self.model.dq2.copy_(torch.tensor(dq2))
-        
-        return dq1, r1, dq2, r2
-
-    def train_step(self):
-        if len(self.memory.buffer) < self.batch_size:
-            return 0.0
-        
-        s, a, r, ns, d = self.memory.sample(self.batch_size)
+        self.model.train()
+        batch = self.memory.sample(batch_size)
+        s, a, r, ns, d, idxs = batch
         
         s = torch.FloatTensor(s).to(self.device)
         a = torch.LongTensor(a).to(self.device)
@@ -108,19 +119,23 @@ class DQNAgent:
         
         curr_q = self.model(s).gather(1, a.unsqueeze(1)).squeeze()
         with torch.no_grad():
-            nxt_q = self.target(ns).max(1)[0]
-            target_q = r + (1 - d) * self.gamma * nxt_q
+            next_actions = self.model(ns).argmax(1, keepdim=True)
+            next_q = self.target(ns).gather(1, next_actions).squeeze()
+            target_q = r + (1 - d) * self.gamma * next_q
             
-        loss = nn.MSELoss()(curr_q, target_q)
+        td_errors = (target_q - curr_q).cpu().numpy()
+        self.memory.update_priorities(idxs, td_errors)
+        
+        loss = self.loss_fn(curr_q, target_q)
         self.optimizer.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
         self.optimizer.step()
+        self.scheduler.step()
         
-        # Decay epsilon
-        if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
+        # Soft update target
+        for tp, lp in zip(self.target.parameters(), self.model.parameters()):
+            tp.data.copy_(0.01 * lp.data + 0.99 * tp.data)
             
+        if self.epsilon > 0.01: self.epsilon *= 0.995
         return loss.item()
-
-    def update_target(self):
-        self.target.load_state_dict(self.model.state_dict())
