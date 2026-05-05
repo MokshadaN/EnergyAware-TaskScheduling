@@ -1,154 +1,160 @@
 import torch
 import numpy as np
+import random
+import os
 from core.environment import CloudEnvironment
-from agents.dqn import DQNAgent
-from utils.helpers import set_seeds, plot_comprehensive, plot_baselines
+from agents.scheduler import SystemScheduler
+from utils.visualizer import comprehensive_plotting, plot_baselines
+from utils.metrics import calculate_atlp
 
-def train_agent(env, agent, n_episodes=250):
-    history = {k: [] for k in ['rewards', 'losses', 'energies', 'atlp', 'deadline_met', 'throughput', 'moving_avg']}
-    best_reward = -float('inf')
-    patience = 0
-    
-    print(f"Starting training on {agent.device}...")
-    for ep in range(n_episodes):
+def set_seeds(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+
+def optimize_system(env: CloudEnvironment, scheduler: SystemScheduler, num_iterations: int = 300,
+                  early_stopping_patience: int = 50, verbose: bool = True):
+    history = {
+        'rewards': [], 'losses': [], 'energies': [], 'atlp': [],
+        'deadline_met': [], 'throughput': [], 'moving_avg': []
+    }
+    best_gain = -float('inf')
+    patience_counter = 0
+    print(f"Starting system optimization on {scheduler.device}...")
+    for iteration in range(num_iterations):
         state = env.reset()
-        total_reward = 0
-        total_loss = 0
-        steps = 0
-        episode_deadlines = []
-        
+        total_gain = 0
+        total_error = 0
+        step_count = 0
+        iteration_deadlines = []
         while True:
-            action = agent.select_action(state)
-            next_state, reward, done, info = env.step(action)
-            
-            # Additional reward components from metrics
-            # Note: The reward calculation is already inside env.step in the enhanced version
-            # but we can add more here if needed.
-            
-            agent.memory.add(state, action, reward, next_state, done)
-            loss = agent.learn()
-            
-            total_loss += loss
-            total_reward += reward
+            action = scheduler.select_action(state)
+            next_state, base_reward, done, info = env.step(action)
+            uptime, cpu_util, mem_util, disk_util, ram_util, load_balance = state
+            dq1, r1 = scheduler.process_utilization_stage(state, action, next_state, uptime, mem_util, disk_util)
+            dq2, r2 = scheduler.process_load_stage(state, action, next_state, cpu_util, ram_util)
+            combined_gain = base_reward + 0.15 * (r1 + r2) + 0.1 * load_balance
+            state_tensor = torch.FloatTensor(state).unsqueeze(0).to(scheduler.device)
+            next_state_tensor = torch.FloatTensor(next_state).unsqueeze(0).to(scheduler.device)
+            with torch.no_grad():
+                current_val = scheduler.model(state_tensor)[0, action].item()
+                next_val_max = scheduler.target_model(next_state_tensor).max().item()
+                error = combined_gain + scheduler.gamma * next_val_max - current_val
+            scheduler.store_transition(state, action, combined_gain, next_state, done, error)
+            loss = scheduler.update_model()
+            total_error += loss
+            total_gain += combined_gain
             state = next_state
-            steps += 1
-            episode_deadlines.append(info['deadline_met'])
-            
-            if done: break
-            
-        # Logging and tracking
-        avg_loss = total_loss / max(1, steps)
-        atlp = np.mean([r.u_j for r in env.resources])
-        
-        history['rewards'].append(total_reward)
-        history['losses'].append(avg_loss)
+            step_count += 1
+            iteration_deadlines.append(info['deadline_met'])
+            if done:
+                break
+        history['rewards'].append(total_gain)
+        history['losses'].append(total_error / max(1, step_count))
         history['energies'].append(env.total_energy)
-        history['atlp'].append(atlp)
-        history['deadline_met'].append(np.mean(episode_deadlines))
+        history['atlp'].append(calculate_atlp(env))
+        history['deadline_met'].append(np.mean(iteration_deadlines))
         history['throughput'].append(env.metrics_history['throughput'][-1] if env.metrics_history['throughput'] else 0)
-        
-        # Moving average
-        mv_avg = np.mean(history['rewards'][-20:])
-        history['moving_avg'].append(mv_avg)
-        
-        if (ep + 1) % 20 == 0:
-            print(f"Episode {ep+1}/{n_episodes} | Reward: {total_reward:.2f} | Energy: {env.total_energy:.2f} | Success: {history['deadline_met'][-1]:.1%}")
-            
-        # Early stopping & model saving
-        if mv_avg > best_reward:
-            best_reward = mv_avg
-            patience = 0
-            torch.save(agent.model.state_dict(), 'best_model.pth')
+        window = min(20, len(history['rewards']))
+        moving_avg = np.mean(history['rewards'][-window:])
+        history['moving_avg'].append(moving_avg)
+        scheduler.exploration_rate = max(scheduler.exploration_min, 
+                                        scheduler.exploration_rate * scheduler.exploration_decay)
+        if moving_avg > best_gain:
+            best_gain = moving_avg
+            patience_counter = 0
+            if not os.path.exists('results'):
+                os.makedirs('results')
+            torch.save(scheduler.model.state_dict(), 'results/best_scheduler_model.pth')
         else:
-            patience += 1
-            
-        if patience > 50 and ep > 100:
-            print("Early stopping triggered.")
+            patience_counter += 1
+        if patience_counter >= early_stopping_patience and iteration > 100:
+            print(f"\nOptimization converged at iteration {iteration}")
             break
-            
+        if verbose and (iteration + 1) % 20 == 0:
+            print(f"Iteration {iteration + 1}/{num_iterations} | "
+                  f"Gain: {total_gain:.2f} | "
+                  f"Avg Gain: {moving_avg:.2f} | "
+                  f"Energy: {env.total_energy:.2f} kWh | "
+                  f"Success: {history['deadline_met'][-1]:.2%} | "
+                  f"Exploration: {scheduler.exploration_rate:.3f}")
+    try:
+        scheduler.model.load_state_dict(torch.load('results/best_scheduler_model.pth'))
+    except:
+        pass
     return history
 
-def evaluate(env, agent, n_episodes=10):
-    print("\nRunning evaluation...")
-    agent.model.load_state_dict(torch.load('best_model.pth'))
-    
+def validate_performance(env: CloudEnvironment, scheduler: SystemScheduler, num_runs: int = 10):
+    print("\nValidating system performance...")
     response_times = []
-    util_trace = []
-    for _ in range(n_episodes):
+    utilization_traces = []
+    original_exploration = scheduler.exploration_rate
+    scheduler.exploration_rate = 0.0
+    for _ in range(num_runs):
         state = env.reset()
         while True:
-            action = agent.select_action(state, eval_mode=True)
-            next_state, reward, done, info = env.step(action)
+            action = scheduler.select_action(state)
+            next_state, _, done, info = env.step(action)
             response_times.append(info['response_time'])
             state = next_state
-            if done: break
-        util_trace.append([r.u_j for r in env.resources])
-        
+            if done:
+                break
+        utilization_traces.append([r.u_j for r in env.resources])
+    scheduler.exploration_rate = original_exploration
     return {
         'response_times': response_times,
-        'resource_utilization': util_trace
+        'resource_utilization': utilization_traces,
+        'performance_metrics': env.get_metrics()
     }
 
-def run_baseline(env_type, num_tasks):
-    env = CloudEnvironment(num_tasks=num_tasks)
-    # FCFS
+def run_baselines(num_tasks: int, num_vms: int):
+    env = CloudEnvironment(num_tasks=num_tasks, num_vms=num_vms)
     env.reset()
     while env.current_task_idx < env.num_tasks:
         vm_idx = np.argmin([r.u_j for r in env.resources])
         env.step(vm_idx)
-    fcfs_energy = env.total_energy
-    fcfs_dl = 1 - np.mean(env.metrics_history['deadline_misses'])
-    
-    # RR
+    fcfs_results = {'energy': env.total_energy, 'deadline_met': 1 - np.mean(env.metrics_history['deadline_misses'])}
     env.reset()
     idx = 0
     while env.current_task_idx < env.num_tasks:
         env.step(idx)
         idx = (idx + 1) % env.num_vms
-    rr_energy = env.total_energy
-    rr_dl = 1 - np.mean(env.metrics_history['deadline_misses'])
-    
-    return {
-        'FCFS': {'energy': fcfs_energy, 'deadline_met': fcfs_dl},
-        'RR': {'energy': rr_energy, 'deadline_met': rr_dl}
-    }
+    rr_results = {'energy': env.total_energy, 'deadline_met': 1 - np.mean(env.metrics_history['deadline_misses'])}
+    return {'FCFS': fcfs_results, 'RR': rr_results}
 
 if __name__ == "__main__":
     set_seeds(42)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-    env = CloudEnvironment(num_tasks=500, num_vms=12)
-    agent = DQNAgent(n_input=6, n_actions=12, device=device)
-    
-    # 1. Training
-    history = train_agent(env, agent)
-    
-    # 2. Evaluation
-    eval_results = evaluate(env, agent)
-    
-    # 3. Baselines
-    baseline_results = {
+    num_tasks = 500
+    num_vms = 12
+    env = CloudEnvironment(num_tasks=num_tasks, num_vms=num_vms)
+    scheduler = SystemScheduler(n_input=6, n_actions=num_vms, device=device)
+    optimization_history = optimize_system(env, scheduler)
+    validation_results = validate_performance(env, scheduler)
+    comparison_data = {
         'FCFS': {'energy': [], 'deadline_met': []},
         'RR': {'energy': [], 'deadline_met': []},
-        'DQN': {'energy': [], 'deadline_met': []}
+        'Optimized': {'energy': [], 'deadline_met': []}
     }
-    for size in [50, 100, 200, 500, 1000]:
-        b = run_baseline('test', size)
+    scales = [50, 100, 200, 500, 1000]
+    for scale in scales:
+        baselines = run_baselines(scale, num_vms)
         for alg in ['FCFS', 'RR']:
-            baseline_results[alg]['energy'].append(b[alg]['energy'])
-            baseline_results[alg]['deadline_met'].append(b[alg]['deadline_met'])
-        
-        # Eval DQN for this size (simplified)
-        env_size = CloudEnvironment(num_tasks=size, num_vms=12)
-        state = env_size.reset()
+            comparison_data[alg]['energy'].append(baselines[alg]['energy'])
+            comparison_data[alg]['deadline_met'].append(baselines[alg]['deadline_met'])
+        env_scaled = CloudEnvironment(num_tasks=scale, num_vms=num_vms)
+        state = env_scaled.reset()
+        temp_exploration = scheduler.exploration_rate
+        scheduler.exploration_rate = 0.0
         while True:
-            action = agent.select_action(state, eval_mode=True)
-            _, _, done, _ = env_size.step(action)
+            action = scheduler.select_action(state)
+            _, _, done, _ = env_scaled.step(action)
             if done: break
-        baseline_results['DQN']['energy'].append(env_size.total_energy)
-        baseline_results['DQN']['deadline_met'].append(1 - np.mean(env_size.metrics_history['deadline_misses']))
-        
-    # 4. Plots
-    plot_comprehensive(history, eval_results)
-    plot_baselines(baseline_results)
-    print("\nAll tasks completed successfully. Plots saved to 'dashboard.png' and 'baselines.png'.")
+        scheduler.exploration_rate = temp_exploration
+        comparison_data['Optimized']['energy'].append(env_scaled.total_energy)
+        comparison_data['Optimized']['deadline_met'].append(1 - np.mean(env_scaled.metrics_history['deadline_misses']))
+    comprehensive_plotting(optimization_history, validation_results, comparison_data)
+    plot_baselines(comparison_data)
+    print("\nOptimization completed successfully.")
