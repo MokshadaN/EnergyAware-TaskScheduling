@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="An interactive cloud task scheduling simulator." />
+    <title>Energy-Aware Scheduler</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <nav><a class="brand" href="#top"><span>◒</span> EnergyAware</a><span class="nav-label">Scheduling simulator</span></nav>
+      <section class="hero" id="top">
+        <p class="eyebrow">Cloud operations playground</p>
+        <h1>Make every task<br /><em>count for less.</em></h1>
+        <p class="intro">Explore how task-placement choices affect energy use, response time, and workload balance across a simulated cloud cluster.</p>
+      </section>
+      <section class="controls" aria-label="Simulation controls">
+        <label>Tasks <output id="taskValue">250</output><input id="tasks" type="range" min="50" max="1000" value="250" step="50" /></label>
+        <label>Virtual machines <output id="vmValue">10</output><input id="vms" type="range" min="3" max="30" value="10" /></label>
+        <label>Scheduling policy<select id="policy"><option value="energy">Energy-aware</option><option value="load">Least utilized</option><option value="round">Round robin</option></select></label>
+        <button id="run" type="button">Run simulation <span>↗</span></button>
+      </section>
+      <section class="metrics" aria-live="polite">
+        <article><p>Energy consumed</p><strong id="energy">—</strong><small>kilowatt-hours</small></article>
+        <article><p>Deadline success</p><strong id="success">—</strong><small>of scheduled tasks</small></article>
+        <article><p>Mean response time</p><strong id="response">—</strong><small>seconds</small></article>
+        <article><p>Load balance</p><strong id="balance">—</strong><small>distribution score</small></article>
+      </section>
+      <section class="grid">
+        <article class="panel chart-panel"><div class="panel-head"><div><p class="eyebrow">Run profile</p><h2>Energy over time</h2></div><span id="policyBadge" class="badge">Energy-aware</span></div><svg id="lineChart" viewBox="0 0 800 260" role="img" aria-label="Cumulative energy chart"></svg></article>
+        <article class="panel"><div class="panel-head"><div><p class="eyebrow">Cluster state</p><h2>VM utilization</h2></div></div><div id="vmBars" class="vm-bars"></div></article>
+      </section>
+      <section class="details panel"><div class="panel-head"><div><p class="eyebrow">How it works</p><h2>Transparent by design</h2></div></div><div class="detail-grid"><p>The simulator generates a reproducible workload and models heterogeneous virtual machines with different capacities and energy rates.</p><p>The energy-aware policy scores each placement using estimated energy use, current utilization, and available capacity. Compare it with least-utilized and round-robin policies.</p><p>Metrics are simulated comparisons, not measurements from a production data center. Use the controls to explore trade-offs, not to make operational decisions.</p></div></section>
+      <footer><span>Built as an interactive portfolio project.</span><a href="https://github.com/MokshadaN/EnergyAware-TaskScheduling" target="_blank" rel="noreferrer">View source ↗</a></footer>
+    </main>
+    <script src="assets/app.js"></script>
+  </body>
+</html>
