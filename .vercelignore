@@ -1,10 +1,4 @@
-# Ignore Python backend scripts so Vercel does not auto-detect them as serverless functions
-*.py
-agents/
-core/
-utils/
-docs/
+# Ignore local virtual environment and python cache
 .venv/
 __pycache__/
 *.pyc
-requirements.txt
