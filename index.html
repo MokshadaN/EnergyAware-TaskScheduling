@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Energy-Aware Cloud Task Scheduling using Deep Q-Networks (DQN). Interactive research report, mathematical formulation, benchmark evaluation, and browser simulator based on Janjani et al. (IEEE TCSS 2025).">
+  <title>Energy-Aware Cloud Task Scheduling | Double-DQN RL</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<main class="shell">
+  <nav aria-label="Main Navigation">
+    <a class="brand" href="#top"><span>⚡</span> EnergyAware RL</a>
+    <div class="nav-links">
+      <a href="#research">Research Basis</a>
+      <a href="#comparison">Policy Comparison</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#evidence">Results</a>
+      <a href="#simulation">Live Simulator</a>
+      <a href="#downloads">Downloads</a>
+    </div>
+  </nav>
+
+  <section class="hero" id="top">
+    <p class="eyebrow">IEEE TCSS 2025 Research Study Implementation</p>
+    <h1>Energy-aware<br><em>task scheduling.</em></h1>
+    <p class="intro">
+      A Deep Q-Network (DQN) multi-objective reinforcement learning framework for task allocation in heterogeneous cloud environments—balancing energy consumption, SLA deadline compliance, response time, and cluster load.
+    </p>
+    <div class="hero-meta">
+      <span>Reference: Janjani et al. (2025)</span>
+      <span>Policy: TaskSchedulingDQN</span>
+      <span>24.5% Energy Savings @ 1000 Tasks</span>
+      <span>PyTorch + Streamlit + Vercel</span>
+    </div>
+    <a class="cta" href="#simulation">Try Live Simulator <span>↓</span></a>
+  </section>
+
+  <section class="research-basis" id="research">
+    <div class="section-label">
+      <span>01</span>
+      <p class="eyebrow">Research Basis</p>
+    </div>
+    <div class="research-copy">
+      <h2>Extending multi-objective RL to heterogeneous cloud clusters.</h2>
+      <p>
+        This project builds upon the foundational research by Janjani et al. (2025) on energy-aware scheduling algorithms for online reinforcement learning applications in cloud environments. The scheduler observes dynamic server states and workload arrivals to solve a multi-objective optimization problem: minimizing energy consumption and task loss probability while satisfying strict deadline constraints.
+      </p>
+      <div class="citation-card">
+        <span>IEEE Publication Reference</span>
+        <p>
+          Harshal Janjani, Tanmay Agarwal, M. P. Gopinath, Vimoh Sharma, and S. P. Raja. 
+          “Designing Energy-Aware Scheduling and Task Allocation Algorithms for Online Reinforcement Learning Applications in Cloud Environments.” 
+          <em>IEEE Transactions on Computational Social Systems</em>, 12(3), 1218-1232, 2025.
+        </p>
+        <a href="https://doi.org/10.1109/TCSS.2024.3508089" target="_blank" rel="noreferrer">DOI: 10.1109/TCSS.2024.3508089 ↗</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="results-summary" id="comparison">
+    <div class="section-label">
+      <span>02</span>
+      <p class="eyebrow">Evaluation Design</p>
+    </div>
+    <div>
+      <h2>Policy performance across workload scales.</h2>
+      <p>
+        Evaluated TaskSchedulingDQN against conventional baselines—First-Come First-Served (FCFS), Earliest Deadline First (EDF), Round Robin (RR), and Multi-Objective Artificial Bee Colony Q-Learning (MOABCQ)—across 50 to 1000 tasks on 10-12 heterogeneous VMs.
+      </p>
+      <div class="result-table">
+        <div class="table-row table-head">
+          <span>Policy</span>
+          <span>Energy at 1000 Tasks</span>
+          <span>Difference vs DQN</span>
+        </div>
+        <div class="table-row">
+          <span>FCFS (Arrival Order)</span>
+          <strong>113.90 kWh</strong>
+          <span>24.5% higher energy</span>
+        </div>
+        <div class="table-row">
+          <span>EDF (Earliest Deadline)</span>
+          <strong>131.25 kWh</strong>
+          <span>34.5% higher energy</span>
+        </div>
+        <div class="table-row">
+          <span>Round Robin (Even Spread)</span>
+          <strong>120.56 kWh</strong>
+          <span>28.7% higher energy</span>
+        </div>
+        <div class="table-row">
+          <span>MOABCQ (Heuristic Comparator)</span>
+          <strong>114.76 kWh</strong>
+          <span>33.4% higher energy</span>
+        </div>
+        <div class="table-row dqn-row">
+          <span>TaskSchedulingDQN (Enhanced RL)</span>
+          <strong>86.00 kWh</strong>
+          <span>Reference (Lowest)</span>
+        </div>
+      </div>
+      <aside class="observation">
+        <strong>Key Research Observation</strong>
+        <p>
+          At 50 tasks, DQN consumed 64.24 kWh due to initial epsilon-greedy exploration. From 100 tasks onward, as the Q-network converged, it consistently achieved the lowest energy consumption across all benchmarked policies.
+        </p>
+      </aside>
+    </div>
+  </section>
+
+  <section class="comparison">
+    <div class="comparison-head">
+      <p class="eyebrow">Policy Comparison</p>
+      <p>Scheduling Mechanism</p>
+    </div>
+    <article class="comparison-row">
+      <div>
+        <span class="method-tag">Baseline 01</span>
+        <h3>First-Come, First-Served (FCFS)</h3>
+        <p>Assigns tasks sequentially in arrival order. Acts as a non-adaptive baseline with no energy or deadline awareness.</p>
+      </div>
+      <div class="focus">
+        <strong>FCFS</strong>
+        <span>Arrival-order placement</span>
+      </div>
+    </article>
+    <article class="comparison-row">
+      <div>
+        <span class="method-tag">Baseline 02</span>
+        <h3>Earliest Deadline First (EDF)</h3>
+        <p>Prioritizes tasks approaching deadline limits, reducing latency violations at the expense of power-hungry VM utilization.</p>
+      </div>
+      <div class="focus">
+        <strong>EDF</strong>
+        <span>Deadline-priority placement</span>
+      </div>
+    </article>
+    <article class="comparison-row">
+      <div>
+        <span class="method-tag">Baseline 03</span>
+        <h3>Round Robin (RR)</h3>
+        <p>Rotates task assignments uniformly across virtual machines without modeling VM computing capacity or energy rate differences.</p>
+      </div>
+      <div class="focus">
+        <strong>Round Robin</strong>
+        <span>Uniform task rotation</span>
+      </div>
+    </article>
+    <article class="comparison-row">
+      <div>
+        <span class="method-tag">State-of-the-Art Comparator</span>
+        <h3>Multi-Objective ABC Q-Learning (MOABCQ)</h3>
+        <p>Swarm-intelligence inspired metaheuristic combined with Q-table updates for task assignment balancing.</p>
+      </div>
+      <div class="focus">
+        <strong>MOABCQ</strong>
+        <span>Swarm-Q Optimization</span>
+      </div>
+    </article>
+    <article class="comparison-row highlight">
+      <div>
+        <span class="method-tag">Enhanced Implementation</span>
+        <h3>TaskSchedulingDQN (Our Work)</h3>
+        <p>Combines Prioritized Experience Replay (PER), Double DQN action selection, soft target updates ($\tau=0.01$), Huber loss, and a two-stage reward function to optimize energy, deadlines, and load balance simultaneously.</p>
+      </div>
+      <div class="focus">
+        <strong>DQN Scheduler</strong>
+        <span>Multi-Objective RL Agent</span>
+      </div>
+    </article>
+  </section>
+
+  <section class="story" id="architecture">
+    <div class="section-label">
+      <span>03</span>
+      <p class="eyebrow">RL Architecture</p>
+    </div>
+    <div class="story-copy">
+      <h2>Deep Q-Network formulation and two-stage reward engine.</h2>
+      <p>
+        The scheduler captures a 6-dimensional state vector representing system uptime, CPU utilization, memory, disk I/O, RAM usage, and load balance. Actions correspond to selecting target Virtual Machines.
+      </p>
+      <div class="signal-grid">
+        <article>
+          <strong>State Observation $S_t$</strong>
+          <span>[Uptime, CPU%, Mem%, Disk%, RAM%, LoadBalance] captures real-time cluster state.</span>
+        </article>
+        <article>
+          <strong>Action Space $A_t$</strong>
+          <span>Discrete choice of target VM $j \in \{1, \dots, M\}$ based on current Q-value predictions.</span>
+        </article>
+        <article>
+          <strong>Two-Stage Reward $R_t$</strong>
+          <span>Stage 1 ($R_1$) penalizes resource overflow; Stage 2 ($R_2$) incentivizes balanced VM loading.</span>
+        </article>
+      </div>
+      <div class="metric-definitions">
+        <span><strong>Energy ($E$)</strong> Power cost computed from VM energy rates ($\eta_j$) and task execution times.</span>
+        <span><strong>SLA Deadline</strong> Binary requirement ensuring response time $T_{resp} \le d_i$.</span>
+        <span><strong>ATLP Metric</strong> Average Task Loss Probability computed from VM utilization variance.</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="steps" id="method">
+    <div class="section-label">
+      <span>04</span>
+      <p class="eyebrow">Execution Pipeline</p>
+    </div>
+    <div class="step-list">
+      <article>
+        <span>01</span>
+        <div>
+          <h3>Workload Generation</h3>
+          <p>Generate heterogeneous synthetic tasks with varying computing demands (MIPS), deadlines, priorities, and dependency chains.</p>
+        </div>
+      </article>
+      <article>
+        <span>02</span>
+        <div>
+          <h3>Heterogeneous Cluster Modeling</h3>
+          <p>Initialize high-performance, medium-tier, and energy-efficient VMs with proportional capacity and power consumption profiles.</p>
+        </div>
+      </article>
+      <article>
+        <span>03</span>
+        <div>
+          <h3>DQN Training with PER</h3>
+          <p>Train the deep neural network using Prioritized Experience Replay, Double DQN target selection, and Huber loss minimization.</p>
+        </div>
+      </article>
+      <article>
+        <span>04</span>
+        <div>
+          <h3>Baseline Comparison Benchmarks</h3>
+          <p>Evaluate learned scheduling policy against FCFS, EDF, Round Robin, and MOABCQ across 50, 100, 200, 500, and 1000 tasks.</p>
+        </div>
+      </article>
+      <article>
+        <span>05</span>
+        <div>
+          <h3>Visualization & Reporting</h3>
+          <p>Generate high-resolution dashboards, energy traces, deadline met charts, response time distributions, and automated project reports.</p>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="evidence" id="evidence">
+    <div class="section-heading">
+      <p class="eyebrow">05 / Stored Benchmark Evidence</p>
+      <h2>Repository Experiment Dashboards</h2>
+      <p>Generated figures from PyTorch training and baseline benchmark evaluations in `results/`.</p>
+    </div>
+    <div class="figure-grid">
+      <figure class="wide">
+        <img src="results/dashboard.png" alt="System performance dashboard">
+        <figcaption>
+          <strong>System Performance Dashboard</strong>
+          <span>Training gain, energy profile, deadline met rate, throughput, ATLP, loss, and utilization heatmap.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="results/baseline_comparison_detailed.png" alt="Detailed baseline comparison">
+        <figcaption>
+          <strong>Baseline Scaling Comparison</strong>
+          <span>Multi-scale energy and success rate evaluation across policies.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="results/dqn_task_scheduling_results.png" alt="DQN task scheduling results">
+        <figcaption>
+          <strong>DQN Scheduler Execution</strong>
+          <span>Detailed task allocation and system state traces.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="results/training_results.png" alt="DQN training results">
+        <figcaption>
+          <strong>Training Convergence</strong>
+          <span>Loss minimization and exploration decay curve.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="results/task_scheduling_results.png" alt="Task scheduling results">
+        <figcaption>
+          <strong>Task Allocation Overview</strong>
+          <span>Cluster workload distribution across VMs.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="results/results_summary.png" alt="Results summary">
+        <figcaption>
+          <strong>Experiment KPI Summary</strong>
+          <span>Comparative energy efficiency and SLA metrics.</span>
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="simulation" id="simulation">
+    <div class="section-heading">
+      <p class="eyebrow">06 / Interactive Simulation</p>
+      <h2>Run Cloud Task Scheduling Scenario</h2>
+      <p>Adjust workload scale, cluster size, and policy to observe dynamic energy and performance trade-offs in real time.</p>
+    </div>
+    <section class="controls" aria-label="Simulation Controls">
+      <label>
+        Workload Tasks <output id="taskValue">250</output>
+        <input id="tasks" type="range" min="50" max="1000" value="250" step="50">
+      </label>
+      <label>
+        Virtual Machines <output id="vmValue">10</output>
+        <input id="vms" type="range" min="3" max="30" value="10">
+      </label>
+      <label>
+        Scheduling Policy
+        <select id="policy">
+          <option value="energy">Energy-Aware (DQN Heuristic)</option>
+          <option value="edf">Earliest Deadline First (EDF)</option>
+          <option value="load">Least Utilized VM</option>
+          <option value="round">Round Robin</option>
+        </select>
+      </label>
+      <button id="run" type="button">
+        <span class="button-label">Run Simulation</span>
+        <i class="spinner" aria-hidden="true"></i>
+      </button>
+    </section>
+    <p id="simulationStatus" class="simulation-status" aria-live="polite">Ready to simulate 250 tasks across 10 virtual machines.</p>
+    
+    <section class="metrics" aria-live="polite">
+      <article>
+        <p>Energy Consumed</p>
+        <strong id="energy">—</strong>
+        <small>kilowatt-hours (kWh)</small>
+      </article>
+      <article>
+        <p>Deadline Success Rate</p>
+        <strong id="success">—</strong>
+        <small>of scheduled tasks</small>
+      </article>
+      <article>
+        <p>Mean Response Time</p>
+        <strong id="response">—</strong>
+        <small>seconds latency</small>
+      </article>
+      <article>
+        <p>Load Balance Score</p>
+        <strong id="balance">—</strong>
+        <small>distribution factor</small>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="panel chart-panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Execution Trace</p>
+            <h3>Cumulative Energy over Tasks</h3>
+          </div>
+          <span id="policyBadge" class="badge">Energy-Aware</span>
+        </div>
+        <svg id="lineChart" viewBox="0 0 800 260" role="img" aria-label="Cumulative energy chart"></svg>
+      </article>
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Cluster State</p>
+            <h3>VM Utilization Profile</h3>
+          </div>
+        </div>
+        <div id="vmBars" class="vm-bars"></div>
+      </article>
+    </section>
+    <p class="disclaimer">
+      Note: The browser simulation demonstrates heuristic task placement. Full PyTorch DQN model training and multi-scale experiments are executed via `python main.py`.
+    </p>
+  </section>
+
+  <section class="evidence" id="downloads">
+    <div class="section-heading">
+      <p class="eyebrow">07 / Project Documentation & Resources</p>
+      <h2>Downloads & Documentation</h2>
+      <p>Access project assets, detailed technical report, and execution guides.</p>
+    </div>
+    <div class="signal-grid" style="grid-template-columns: repeat(3, 1fr); margin-top: 24px;">
+      <article>
+        <strong>📄 Research Report</strong>
+        <span>Detailed Word project report detailing equations, experimental setup, and benchmark evaluation results.</span>
+        <div style="margin-top: 12px;">
+          <a href="docs/EnergyAware_TaskScheduling_Report.docx" style="color: var(--accent); font-family: 'DM Mono'; font-size: 12px; text-decoration: none;">Download Report (.docx) ↗</a>
+        </div>
+      </article>
+      <article>
+        <strong>⚡ Streamlit Web Dashboard</strong>
+        <span>Interactive Streamlit app available in the repository. Run locally with `streamlit run app.py`.</span>
+        <div style="margin-top: 12px;">
+          <span style="color: var(--muted); font-family: 'DM Mono'; font-size: 11px;">Command: streamlit run app.py</span>
+        </div>
+      </article>
+      <article>
+        <strong>🔗 IEEE Paper Reference</strong>
+        <span>Original paper reference by Janjani et al. (IEEE Transactions on Computational Social Systems 2025).</span>
+        <div style="margin-top: 12px;">
+          <a href="https://doi.org/10.1109/TCSS.2024.3508089" target="_blank" rel="noreferrer" style="color: var(--accent); font-family: 'DM Mono'; font-size: 12px; text-decoration: none;">View Paper DOI ↗</a>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <footer>
+    <span>Energy-Aware Cloud Task Scheduling · Apache-2.0 License</span>
+    <a href="https://github.com/MokshadaN/EnergyAware-TaskScheduling" target="_blank" rel="noreferrer">GitHub Repository ↗</a>
+  </footer>
+</main>
+<script src="assets/app.js"></script>
+</body>
+</html>
