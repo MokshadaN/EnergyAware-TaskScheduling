@@ -1,53 +1,43 @@
 # Energy-Aware Cloud Task Scheduling
 
-An interactive cloud-scheduling simulator that compares task-placement policies across energy consumption, latency, deadline success, and VM utilization.
+An interactive portfolio project for comparing cloud task-placement policies across energy consumption, latency, deadline success, and virtual-machine utilization.
 
-## Live dashboard
+## What you can explore
 
-Deploy `app.py` on Streamlit Community Cloud to publish the interactive demo.
-
-## What it demonstrates
-
-- Interactive workload and cluster controls
+- Adjustable workload and cluster size
 - Energy-aware, least-utilized, and round-robin scheduling policies
-- Per-VM energy and utilization charts
-- Reproducible scenarios using a fixed random seed
-- CSV export for each simulation run
+- Cumulative energy and VM-utilization visualizations
+- A self-contained browser simulation with no API keys or backend
 
-The original reinforcement-learning training code remains in the repository for experimentation. The dashboard is intentionally lightweight and uses a transparent heuristic so visitors can explore the scheduling trade-offs without a model checkpoint or lengthy training job.
+The original Python reinforcement-learning code remains in the repository for experimentation. The public dashboard uses a transparent, deterministic heuristic so visitors can immediately compare scheduling trade-offs.
 
 ## Run locally
 
-```bash
-git clone https://github.com/MokshadaN/EnergyAware-TaskScheduling.git
-cd EnergyAware-TaskScheduling
-python -m venv .venv
-# Windows: .venv\Scripts\activate
-# macOS/Linux: source .venv/bin/activate
-pip install -r requirements.txt
-streamlit run app.py
-```
+Open `index.html` in a modern browser, or serve the repository with any static-file server.
 
-## Deploy
+## Deploy to Vercel
 
-1. Sign in at [Streamlit Community Cloud](https://share.streamlit.io).
-2. Create an app from this repository and select the `main` branch.
-3. Set the entry point to `app.py`.
-4. Deploy. Streamlit installs packages from `requirements.txt` automatically.
+1. Import this GitHub repository in [Vercel](https://vercel.com/new).
+2. Select the `main` branch after merging the pull request.
+3. Vercel automatically detects and serves the static site—leave the build command and output directory blank.
+4. Click **Deploy**.
+
+`vercel.json` adds clean URLs and a small set of standard security headers.
 
 ## Project structure
 
 ```text
-app.py                  # Interactive portfolio dashboard
+index.html              # Vercel portfolio site
+assets/                 # Browser simulation and styles
+vercel.json             # Static-site deployment configuration
 core/                   # Cloud-environment simulation
 agents/                 # DQN scheduler implementation
-utils/                  # Metrics and visualizations
 main.py                 # Training and benchmark workflow
 ```
 
 ## Notes
 
-This project uses synthetic workload data. Its visual metrics are suitable for comparing simulated policies; they should not be interpreted as measurements from a production cloud environment.
+This project uses synthetic workload data. Its visual metrics are for simulated policy comparisons and are not measurements from a production data center.
 
 ## License
 
